@@ -1,0 +1,20 @@
+import type { Settings } from "./types";
+export const defaults: Settings = {
+  protocol: "auto",
+  concurrency: 20,
+  timeout: 10000,
+  retries: 2,
+  retryDelay: 1000,
+  maxRedirects: 10,
+  crawlDepth: 3,
+  maxPages: 5000,
+  perHostConcurrency: 4,
+  hostDelay: 100,
+  respectRobots: true,
+  checkAssets: true,
+  userAgent: "URLCheckerPro/1.0.2",
+  fastThreshold: 500,
+  normalThreshold: 1500,
+  slowThreshold: 3000,
+  theme: "system",
+};

@@ -1,0 +1,51 @@
+name: Windows release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.ref_name != 'v1.0.0'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Check version matches tag
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw 'Package version does not match release tag.' }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:desktop
+      - run: npm run dist:win
+      - run: npm run dist:portable
+      - name: Create checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist\*.exe | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+            "$hash  $($_.Name)"
+          } | Set-Content -LiteralPath dist\SHA256SUMS.txt -Encoding ascii
+      - name: Attach files to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host 'Release already exists; preserve its published files.'
+            exit 0
+          }
+          $files = @(Get-ChildItem -LiteralPath dist -Filter '*.exe' | ForEach-Object { $_.FullName })
+          $files += 'dist\SHA256SUMS.txt'
+          gh release create $tag @files --draft --verify-tag --title "URL Checker Pro $tag" --notes 'See CHANGELOG.md for changes and verification. Review these Windows builds before publishing.'
+          if ($LASTEXITCODE -ne 0) { throw 'Release creation failed.' }
