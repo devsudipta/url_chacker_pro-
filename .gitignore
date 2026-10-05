@@ -1,0 +1,16 @@
+node_modules/
+.npm-cache/
+out/
+dist/
+*.log
+*.db*
+test-artifacts/
+.release-tools/
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+coverage/
+playwright-report/
+test-results/
