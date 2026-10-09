@@ -2,15 +2,25 @@ name: Windows release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to verify/build
+        required: true
+        default: v1.2.0
 permissions:
   contents: write
 jobs:
   build:
-    if: github.ref_name != 'v1.0.0'
+    if: github.event_name == 'workflow_dispatch' || github.ref_name != 'v1.0.0'
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -19,14 +29,15 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw 'Package version does not match release tag.' }
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw 'Invalid version tag.' }
+          if ("v$version" -ne $env:RELEASE_TAG) { throw 'Package version does not match release tag.' }
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
       - run: npm run test:desktop
-      - run: npm run dist:win
-      - run: npm run dist:portable
+      - run: npm run dist:win -- --publish never
+      - run: npm run dist:portable -- --publish never
       - name: Create checksums
         shell: pwsh
         run: |
@@ -39,7 +50,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = $env:GITHUB_REF_NAME
+          $tag = $env:RELEASE_TAG
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             Write-Host 'Release already exists; preserve its published files.'

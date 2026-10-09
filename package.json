@@ -19,8 +19,8 @@
     "format": "prettier --write src shared tests scripts *.json *.ts *.mjs",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
-    "dist:win": "npm run build && electron-builder --win nsis --x64",
-    "dist:portable": "npm run build && electron-builder --win portable --x64"
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "dist:portable": "npm run build && electron-builder --win portable --x64 --publish never"
   },
   "dependencies": {
     "cheerio": "^1.1.2",

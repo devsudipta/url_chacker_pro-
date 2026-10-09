@@ -6,6 +6,11 @@ Every published version has a separate Git tag and GitHub Release. Executables a
 
 Record future fixes here as they are implemented. No additional fixes are claimed yet.
 
+### Build automation
+
+- Disable electron-builder's implicit tag-triggered publication; the release workflow attaches files explicitly.
+- Allow verification/building of an existing version tag through manual workflow dispatch while preserving published tags and downloads.
+
 ## 1.2.0 — 2026-10-09
 
 ### Added
