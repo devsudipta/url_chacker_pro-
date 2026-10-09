@@ -1,16 +1,31 @@
 # URL Checker Pro
 
-**Version 1.2.0 · Windows 10/11 x64 · Developed by Sudipta Roy Akash**
+**Version 1.2.5 · Windows 10/11 x64 · Developed by Sudipta Roy Akash**
 
 ## Download and install
 
-- [Download the 1.2.0 Windows installer](https://github.com/devsudipta/url_chacker_pro-/releases/download/v1.2.0/URLChecker-Setup-1.2.0.exe) — installation with desktop/Start Menu shortcuts and an uninstaller.
-- [Download the 1.2.0 portable executable](https://github.com/devsudipta/url_chacker_pro-/releases/download/v1.2.0/URLChecker-Portable-1.2.0.exe) — run from a writable folder without installing.
+- [Download the 1.2.5 Windows installer](https://github.com/devsudipta/url_chacker_pro-/releases/download/v1.2.5/URLChecker-Setup-1.2.5.exe) — installation with desktop/Start Menu shortcuts and an uninstaller.
+- [Download the 1.2.5 portable executable](https://github.com/devsudipta/url_chacker_pro-/releases/download/v1.2.5/URLChecker-Portable-1.2.5.exe) — run from a writable folder without installing.
 - [All versions and release notes](https://github.com/devsudipta/url_chacker_pro-/releases) · [Fixes and changelog](CHANGELOG.md)
 
 These development builds do not have a publisher signing certificate. Node.js is required for source development, not for running the downloaded application.
 
-Launch the app, open **Quick Scan**, add a Name and URL (or paste URLs), and select a protocol. **Automatic** keeps the entered scheme and tries HTTP if HTTPS fails without a response. **Both** checks HTTP and HTTPS separately. After the scan, select a recheck interval and click **Start monitoring** to track live status and save outage/recovery times. Use **Show outage history** and **Export monitoring JSON** for the saved record.
+Launch the app, open **Quick Scan**, add a Name and URL (or paste URLs), and select a protocol. **Automatic** preserves the entered scheme (HTTPS for scheme-less input), with no HTTP/TLS fallback. **Both** checks HTTP and HTTPS separately. After the scan, select a recheck interval and click **Start monitoring** to track live status and save outage/recovery times. Use **Show outage history** and **Export monitoring JSON** for the saved record.
+
+## Accurate URL and API monitoring in 1.2.5
+
+After a scan, start monitoring and use **Configure endpoint** on a live row. Choose GET, HEAD, POST, PUT, PATCH, DELETE or OPTIONS; adjust connection/response deadlines, retry attempts and initial backoff, allowed HTTP statuses, expected text, JSON fields and maximum response time. Advanced configuration lets you supply headers and a UTF-8 request body. No separate API Checker screen is required.
+
+- **Healthy**: the configured request and all expectations passed. **HTTP Error**: an HTTP error status outside the expected set. **Unexpected Response**: status/text/JSON/timing expectations failed, response decoding failed, or request policy prevented a redirect.
+- **TLS Certificate Error**, **Connection Refused**, **Timeout**, **DNS Error** and **Network Error** preserve distinct causes. Use **Check details** for actual status, last-check time, duration, attempts, assertions, certificate information and redirect trace.
+- HTTPS always verifies certificates on the primary request. The optional per-endpoint **insecure TLS diagnostic** requires acknowledging a security warning. It performs a separate unverified HEAD connection without query parameters, credentials or body, and never follows redirects. A diagnostic HTTP 200 does **not** make the original HTTPS check Healthy. Its different method/query and unverified result are displayed explicitly.
+- A successful HTTP request and a failed HTTPS certificate check are separate observations. The reported endpoint example returning HTTP 200 with text `103.217.111.97` should pass HTTP monitoring unless additional expectations reject it; HTTPS with an untrusted root remains a TLS Certificate Error. Installing a valid trusted certificate is the remedy for verified HTTPS health.
+- Connection timeout covers DNS, TCP and TLS establishment. Response timeout starts after connection establishment and limits completion of the response. Response time is the final attempt's network duration, including redirects, excluding queue waits and retry backoff. Retry backoff doubles up to 60 seconds and respects Retry-After. Certificate failures and failed expectations are not retried. POST/PUT/PATCH/DELETE are not replayed unless **Allow retries that may repeat API changes** is explicitly enabled.
+- JSON field paths use dot-separated own properties, including numeric array indices; `jsonExpected` contains a JSON value such as `true`, `"ready"` or `200`. Matching is type-sensitive; object/array matching uses JSON serialization (object property order matters). Text matching is case-sensitive containment. Responses are bounded to 10 MB compressed and decompressed, including gzip/deflate/Brotli decoding.
+- API headers, bodies and expected secret values are encrypted using Windows-backed Electron safeStorage. Dashboard/configuration previews hide saved secrets and all query values. `[REDACTED]` retains an existing saved value; an empty value clears it. Response bodies are never saved to monitoring history or displayed in previews. Logs omit exception content. URLs and historical records remain in the local database to preserve request fidelity; protect the database as sensitive local data.
+- Only requests initiated through the trusted main window are authorized. Public HTTP/HTTPS targets are allowed; private, loopback and reserved addresses are blocked until you explicitly grant the exact hostname in **Settings > Authorized private hostnames** or an endpoint's **Authorized private hosts**. Only grant systems you own or have permission to monitor. Metadata/link-local, multicast and IPv6 transition addresses remain blocked. Every DNS answer is validated and pinned; every redirect is checked again. Redirects are off by default for monitoring; cross-origin redirects require an exact allowed origin and cannot forward headers containing credentials or request bodies. No method or scheme fallback occurs.
+
+Configuration changes apply to the next cycle and persist for the exact saved URL across monitoring sessions. Existing scans and monitoring history are preserved by additive SQLite migrations. Closing the app still stops observation; this is a local desktop monitor, not a background Windows service. See [implementation and security notes](MONITORING.md).
 
 ## Developer
 
@@ -83,7 +98,7 @@ Unit/integration tests start a deterministic loopback HTTP server: success, 404,
 After creating a portable build, test that actual executable with:
 
 ```powershell
-$env:URLCHECKER_TEST_EXE = Join-Path (Get-Location) 'dist\URLChecker-Portable-1.2.0.exe'
+$env:URLCHECKER_TEST_EXE = Join-Path (Get-Location) 'dist\URLChecker-Portable-1.2.5.exe'
 npx playwright test
 Remove-Item Env:URLCHECKER_TEST_EXE
 ```
@@ -94,10 +109,10 @@ The same environment variable can target an installed executable. Portable tests
 
 ```powershell
 npm run dist:win
-# dist\URLChecker-Setup-1.2.0.exe
+# dist\URLChecker-Setup-1.2.5.exe
 
 npm run dist:portable
-# dist\URLChecker-Portable-1.2.0.exe
+# dist\URLChecker-Portable-1.2.5.exe
 ```
 
 Do not run two distribution/build commands concurrently: both use `out/` and `dist/win-unpacked/`. First builds download Electron/NSIS tools. The installer is assisted (`oneClick: false`), per-user by default and allows a custom installation directory. It registers in Installed Apps and supplies an uninstaller. Keep the stable application ID `dev.sudiptaroy.urlchecker` across releases. Publisher metadata names Sudipta Roy Akash.
@@ -133,7 +148,7 @@ out/                    Compiled application
 dist/                   Installer, portable and unpacked builds
 ```
 
-## Version 1.2.0
+## Names and scheduled monitoring
 
 ### Names and automatic rechecks
 
@@ -141,13 +156,13 @@ In Quick Scan, enter a **Name** before the **URL** and click **Add URL**. You ca
 
 After the scan finishes, use **Auto refresh & outage history** on URL Results. Choose 5, 10, 20 or 30 seconds, or 1, 2, 5 or 10 minutes, then click **Start monitoring**. Each cycle rechecks the URLs; the delay starts after a completed cycle so requests never overlap. **Apply interval** changes the delay without resetting an outage. Stop monitoring to end the session.
 
-The live table updates automatically and every check is stored in SQLite. HTTP 2xx/3xx without a network/redirect error counts as online; other results count as offline. **Show outage history** displays when failure was detected, when recovery was detected, and the observed offline duration. **Export monitoring JSON** saves all check records and outage history. Names, ports, query strings and existing HTTP/HTTPS selection are preserved.
+The live table updates automatically and every check is stored in SQLite. Monitoring defaults to expected HTTP 200?299; application health, network reachability and TLS security appear separately. TLS-only failures have unknown application health and do not create false outages or invent recovery. **Show outage history** displays when failure was detected, when recovery was detected, and the observed offline duration. **Export monitoring JSON** saves all check records and outage history. Names, ports, query strings and existing HTTP/HTTPS selection are preserved.
 
 Monitoring continues across page navigation while the app is running. Closing the app stops monitoring; saved records remain after reopening. Monitoring does not run as a Windows background service and does not restart automatically. Outages with no observed recovery show an unknown final duration when monitoring ends. Detection times are approximate check times; availability between checks is not measured. Monitoring history can grow with frequent checks; deleting its parent scan removes those records.
 
 The live monitoring table shows current status; the original scan table and scan reports remain the original scan snapshot. The history view shows the newest 1,000 outages; monitoring JSON includes all periods and checks.
 
-API Checker has been removed. Scan configuration offers Automatic, HTTPS only, HTTP only and Both. Automatic preserves the entered scheme (HTTPS for scheme-less URLs) and tries HTTP when HTTPS fails without an HTTP response. Both saves separate results for each scheme. Paths and queries are preserved; TLS verification stays enabled. Automatic fallback uses unencrypted HTTP; choose HTTPS only when required.
+API Checker has been removed. Scan configuration offers Automatic, HTTPS only, HTTP only and Both. Automatic preserves the entered scheme (HTTPS for scheme-less URLs) without fallback. Both saves separate results for each scheme. Paths and queries are preserved; TLS verification stays enabled. Forced HTTP/HTTPS options explicitly change the scheme before scanning; monitoring subsequently checks each saved endpoint exactly. HTTPS-to-HTTP redirects are blocked.
 
 Developed by Sudipta Roy Akash. Website: https://sudiptaroy.dev Â· GitHub: https://github.com/devsudipta Â· Email: hello@sudiptaroy.dev.
 

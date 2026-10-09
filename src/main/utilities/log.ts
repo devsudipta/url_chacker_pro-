@@ -14,7 +14,7 @@ export function logger(file: string): (error: unknown) => void {
       }
       appendFileSync(
         file,
-        `${new Date().toISOString()} ${error instanceof Error ? error.stack : String(error)}\n`,
+        `${new Date().toISOString()} Application operation failed (${error instanceof Error ? error.name.replace(/[^a-zA-Z]/g, "") : "Error"}). Details suppressed to protect credentials.\n`,
       );
     } catch {
       console.error("Unable to write application log");

@@ -1,6 +1,15 @@
 import { z } from "zod";
 export const settingsSchema = z
   .object({
+    allowedPrivateHosts: z
+      .array(
+        z
+          .string()
+          .max(253)
+          .regex(/^[a-zA-Z0-9.:[\]-]+$/),
+      )
+      .max(100)
+      .default([]),
     protocol: z.enum(["auto", "https", "http", "both"]).default("auto"),
     concurrency: z.number().int().min(1).max(100),
     timeout: z.number().int().min(100).max(120000),

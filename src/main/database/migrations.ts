@@ -21,4 +21,9 @@ CREATE TABLE outages(id TEXT PRIMARY KEY,target_id TEXT NOT NULL REFERENCES moni
 CREATE UNIQUE INDEX idx_open_outage ON outages(target_id) WHERE ended_at IS NULL;
 CREATE INDEX idx_monitor_session ON monitor_sessions(scan_id,started_at);
 `,
+  `
+CREATE TABLE endpoint_configs(url TEXT PRIMARY KEY,configuration TEXT NOT NULL,secret BLOB);
+ALTER TABLE monitor_targets ADD COLUMN diagnostic TEXT;
+ALTER TABLE monitor_checks ADD COLUMN diagnostic TEXT;
+`,
 ];

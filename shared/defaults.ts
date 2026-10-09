@@ -1,5 +1,6 @@
 import type { Settings } from "./types";
 export const defaults: Settings = {
+  allowedPrivateHosts: [],
   protocol: "auto",
   concurrency: 20,
   timeout: 10000,
@@ -12,7 +13,7 @@ export const defaults: Settings = {
   hostDelay: 100,
   respectRobots: true,
   checkAssets: true,
-  userAgent: "URLCheckerPro/1.2.0",
+  userAgent: "URLCheckerPro/1.2.5",
   fastThreshold: 500,
   normalThreshold: 1500,
   slowThreshold: 3000,

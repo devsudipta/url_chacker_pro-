@@ -125,6 +125,14 @@ test("real desktop: scan, detail, themes, persistence and preload isolation", as
         node: typeof (window as unknown as { process: unknown }).process,
       })),
     ).toEqual({ require: "undefined", node: "undefined" });
+    await page.evaluate(async () => {
+      const current = await window.desktop.settings();
+      await window.desktop.saveSettings({
+        ...current.settings,
+        allowedPrivateHosts: ["127.0.0.1"],
+      });
+    });
+    await page.reload();
     await page.getByRole("button", { name: "Quick Scan", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "API Checker", exact: true }),
@@ -132,7 +140,7 @@ test("real desktop: scan, detail, themes, persistence and preload isolation", as
     await expect(page.locator(".workspace-footer")).toContainText(
       "Developed by Sudipta Roy Akash",
     );
-    await expect(page.locator(".workspace-footer")).toContainText("1.2.0");
+    await expect(page.locator(".workspace-footer")).toContainText("1.2.5");
     await expect(page.getByLabel("URL protocol")).toHaveValue("auto");
     await page.getByLabel("URL protocol").selectOption("both");
     await page.getByLabel("URL protocol").selectOption("auto");
@@ -217,9 +225,54 @@ test("real desktop: scan, detail, themes, persistence and preload isolation", as
     await monitoring
       .getByRole("button", { name: "Start monitoring", exact: true })
       .click();
-    await expect(monitoring.locator(".status")).toHaveText("online");
+    await expect(monitoring.locator(".status")).toHaveText("Healthy");
+    await monitoring
+      .getByRole("button", { name: "Check details", exact: true })
+      .click();
+    await expect(
+      monitoring.getByRole("region", { name: "Detailed check result" }),
+    ).toContainText("Network: reachable");
+    await monitoring
+      .getByRole("button", { name: "Configure endpoint", exact: true })
+      .click();
+    await monitoring
+      .getByLabel("Request method", { exact: true })
+      .selectOption("HEAD");
+    await monitoring
+      .getByLabel("Response timeout (ms)", { exact: true })
+      .fill("1500");
+    await monitoring
+      .getByLabel("Expected status codes", { exact: true })
+      .fill("200");
+    await monitoring
+      .getByText("Advanced request headers, body and full configuration", {
+        exact: true,
+      })
+      .click();
+    const editor = monitoring.getByLabel("Endpoint configuration JSON", {
+      exact: true,
+    });
+    const config = JSON.parse(await editor.inputValue());
+    config.headers = { Authorization: "Bearer desktop-test-secret" };
+    await editor.fill(JSON.stringify(config));
+    await monitoring
+      .getByRole("button", { name: "Save endpoint configuration", exact: true })
+      .click();
+    await monitoring
+      .getByRole("button", { name: "Configure endpoint", exact: true })
+      .click();
+    await monitoring
+      .getByText("Advanced request headers, body and full configuration", {
+        exact: true,
+      })
+      .click();
+    await expect(editor).toHaveValue(/\[REDACTED\]/);
+    expect(await editor.inputValue()).not.toContain("desktop-test-secret");
+    await monitoring
+      .getByRole("button", { name: "Close details", exact: true })
+      .click();
     monitorOffline = true;
-    await expect(monitoring.locator(".status")).toHaveText("offline", {
+    await expect(monitoring.locator(".status")).toHaveText("HTTP Error", {
       timeout: 15000,
     });
     await monitoring
@@ -249,7 +302,7 @@ test("real desktop: scan, detail, themes, persistence and preload isolation", as
     await monitoring
       .getByRole("button", { name: "Apply interval", exact: true })
       .click();
-    await expect(monitoring.locator(".status")).toHaveText("online", {
+    await expect(monitoring.locator(".status")).toHaveText("Healthy", {
       timeout: 15000,
     });
     await expect(
@@ -265,7 +318,7 @@ test("real desktop: scan, detail, themes, persistence and preload isolation", as
       "Monitoring stopped",
     );
     await page.screenshot({
-      path: "test-artifacts/monitoring-1.2.0.png",
+      path: "test-artifacts/monitoring-1.2.5.png",
       fullPage: true,
     });
     await application.close();

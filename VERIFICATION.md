@@ -2,6 +2,21 @@
 
 Verified on Windows x64 on October 5, 2026. This record distinguishes implemented/automated checks from manual release checks.
 
+## Version 1.2.5 — October 9, 2026
+
+Type checking, lint, production build and all 26 integration tests passed. Coverage includes HTTP 200/500, GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS, exact duplicate/empty queries, gzip JSON, expected text/JSON/status/time failures, DNS failures, refused/reset connections, connection/TLS/response timeouts, trusted/untrusted/expired/mismatched certificates, isolated insecure diagnostics (including failed redirected TLS destinations), retries/replay restrictions, private-host/metadata restrictions and encrypted configuration persistence.
+
+A populated version 1.2.0 database upgrade test preserves scans, named endpoints, original queries, preferences, existing monitoring checks and exact outage durations. Prior history is not reclassified or rewritten. TLS-only failures remain unknown application health and do not open false outages or invent recovery.
+
+The real compiled Electron desktop test passed across three launches, including endpoint method/timeouts/status configuration, encrypted API-header storage with redacted previews, application/network/TLS indicators, original scanner features, outage/recovery, interval changes and persisted history. The monitoring screenshot is test-artifacts/monitoring-1.2.5.png; its layout was visually inspected.
+
+Both Windows builds succeeded. The actual URLChecker-Portable-1.2.5.exe passed the same desktop test across three launches in approximately 90 seconds. Packaged Windows metadata reports version 1.2.5, company Sudipta Roy Akash.
+
+- Installer: dist/URLChecker-Setup-1.2.5.exe, 116,997,423 bytes. SHA-256: A9CCF4F7691B10A9C97EC6B8095FCB0103BA7CC2C5D11C619F27EEF869CE774A.
+- Portable: dist/URLChecker-Portable-1.2.5.exe, 103,150,491 bytes. SHA-256: F58A05854DC77AB62060391AEC013F0A9A0D6C5722E913538B0DCADB3A4AF7C5.
+
+The supplied production PHP endpoint was not contacted; equivalent local HTTP/TLS servers validate its reported diagnostic pattern. Installer wizard/install/uninstall interactions were not repeated for this version. Builds remain unsigned. JSON matching is UTF-8 and serialization-based; object property order matters. Existing URL queries remain sensitive local database data. Full implementation and security limits are documented in MONITORING.md.
+
 ## Version 1.2.0 — October 9, 2026
 
 Type checking, lint and production build passed. All 19 integration tests passed: the original scanner/protocol coverage plus named URL/import/export/search tests, additive SQLite migration and outage transition/persistence tests, and a real repeating HTTP monitor test with failure, recovery, interval changes and cancellation.

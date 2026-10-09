@@ -55,6 +55,26 @@ export function networkError(error: unknown): {
   const err = error as NodeJS.ErrnoException;
   const raw = err.code ?? "UNKNOWN_ERROR";
   const map: Record<string, [Category, string, string]> = {
+    TARGET_BLOCKED: [
+      "skipped",
+      "TARGET_BLOCKED",
+      "Target blocked by monitoring authorization policy",
+    ],
+    UNSAFE_REDIRECT: [
+      "redirect",
+      "UNSAFE_REDIRECT",
+      "HTTPS downgrade redirect blocked",
+    ],
+    METHOD_REDIRECT_BLOCKED: [
+      "redirect",
+      "METHOD_REDIRECT_BLOCKED",
+      "Redirect would change the configured request method",
+    ],
+    RESPONSE_DECODE_ERROR: [
+      "error",
+      "RESPONSE_DECODE_ERROR",
+      "Response could not be decoded safely",
+    ],
     CREDENTIAL_REDIRECT_BLOCKED: [
       "redirect",
       "CREDENTIAL_REDIRECT_BLOCKED",
@@ -106,7 +126,7 @@ export function networkError(error: unknown): {
   };
   const entry =
     map[raw] ??
-    (/CERT|SSL|TLS|SELF_SIGNED/.test(raw)
+    (/CERT|SSL|TLS|SELF_SIGNED|UNTRUSTED_ROOT/.test(raw)
       ? (["ssl", "SSL_ERROR", "SSL certificate validation failed"] as const)
       : (["error", "UNKNOWN_ERROR", "Request failed"] as const));
   return {

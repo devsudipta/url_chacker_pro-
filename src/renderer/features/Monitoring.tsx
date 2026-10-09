@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import type { MonitorSnapshot, Settings } from "../../../shared/types";
+import { EndpointFields } from "./EndpointFields";
+import type {
+  EndpointConfig,
+  MonitorSnapshot,
+  MonitorTarget,
+  Settings,
+} from "../../../shared/types";
 
 const date = (value: string | null): string =>
   value ? new Date(value).toLocaleString() : "—";
@@ -19,6 +25,10 @@ export function Monitoring({
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  const [selected, setSelected] = useState<MonitorTarget | null>(null);
+  const [editing, setEditing] = useState(false),
+    [configuration, setConfiguration] = useState("");
+  const [tlsAcknowledged, setTlsAcknowledged] = useState(false);
   useEffect(() => {
     if (!scanId) return;
     let alive = true;
@@ -64,8 +74,9 @@ export function Monitoring({
         <div>
           <h3>Auto refresh & outage history</h3>
           <p>
-            Checks continue while the app is open. HTTP 2xx/3xx is online; other
-            responses or connection failures are offline.
+            Checks continue while the app is open. Application health, network
+            reachability and TLS security are evaluated separately. Configure
+            each endpoint after starting monitoring.
           </p>
         </div>
       </div>
@@ -151,9 +162,13 @@ export function Monitoring({
                 <th>Name</th>
                 <th>URL</th>
                 <th>Live status</th>
+                <th>Application health</th>
                 <th>HTTP</th>
+                <th>Network</th>
+                <th>TLS security</th>
                 <th>Last checked</th>
                 <th>Error</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -167,17 +182,224 @@ export function Monitoring({
                     <span
                       className={`status ${target.status === "online" ? "online" : target.status === "offline" ? "broken" : "skipped"}`}
                     >
-                      {target.status}
+                      {target.diagnostic?.state ?? target.status}
                     </span>
                   </td>
+                  <td>
+                    {target.diagnostic?.application ??
+                      (target.status === "online"
+                        ? "healthy"
+                        : target.status === "offline"
+                          ? "failed"
+                          : "unknown")}
+                  </td>
                   <td>{target.code ?? "—"}</td>
+                  <td>{target.diagnostic?.network ?? "unknown"}</td>
+                  <td>{target.diagnostic?.tls ?? "unknown"}</td>
                   <td>{date(target.checkedAt)}</td>
                   <td>{target.error ?? "—"}</td>
+                  <td>
+                    <button
+                      onClick={() => {
+                        setSelected(target);
+                        setEditing(false);
+                      }}
+                    >
+                      Check details
+                    </button>
+                    <button
+                      onClick={() =>
+                        void action(async () => {
+                          setSelected(target);
+                          setConfiguration(
+                            JSON.stringify(
+                              await window.desktop.monitorConfig(target.id),
+                              null,
+                              2,
+                            ),
+                          );
+                          setEditing(true);
+                          setTlsAcknowledged(false);
+                        })
+                      }
+                    >
+                      Configure endpoint
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+      {selected && (
+        <section className="panel" aria-label="Detailed check result">
+          <h3>
+            {selected.name || "Endpoint"} — {selected.url}
+          </h3>
+          <button
+            onClick={() => {
+              setSelected(null);
+              setEditing(false);
+            }}
+          >
+            Close details
+          </button>
+          {editing ? (
+            <>
+              <p>
+                Edit monitoring configuration. Timeouts and thresholds use
+                milliseconds; retries means additional attempts. JSON paths use
+                dot-separated own-property names; jsonExpected is a JSON value.
+                Allowed status codes default to 200–299. Changes apply next
+                cycle. Existing [REDACTED] values retain their encrypted
+                secrets; enter an empty value to clear them.
+              </p>
+              <p>
+                privateHosts grants exact private hostnames you are authorized
+                to monitor. Redirects default off; cross-origin redirects need
+                redirectOrigins authorization and never forward credentials or
+                bodies. Scheme and method fallback are disabled.
+              </p>
+              <EndpointFields
+                value={configuration}
+                onChange={setConfiguration}
+              />
+              <details>
+                <summary>
+                  Advanced request headers, body and full configuration
+                </summary>
+                <label>
+                  Endpoint configuration JSON
+                  <textarea
+                    aria-label="Endpoint configuration JSON"
+                    rows={20}
+                    value={configuration}
+                    onChange={(e) => setConfiguration(e.target.value)}
+                    spellCheck={false}
+                  />
+                </label>
+              </details>
+              <p role="alert">
+                Security warning: insecureDiagnostic permits a separate
+                unverified HEAD connection after a certificate failure. It omits
+                query values and credentials, and cannot prove verified HTTPS
+                health.
+              </p>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={tlsAcknowledged}
+                  onChange={(e) => setTlsAcknowledged(e.target.checked)}
+                />
+                I understand the security risk of an unverified TLS diagnostic.
+              </label>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void action(async () => {
+                    const config: EndpointConfig = JSON.parse(configuration);
+                    if (config.insecureDiagnostic && !tlsAcknowledged)
+                      throw new Error(
+                        "Acknowledge the TLS security warning before enabling insecure diagnostics",
+                      );
+                    await window.desktop.monitorSaveConfig(selected.id, config);
+                    setEditing(false);
+                    setMessage(
+                      "Endpoint settings saved; apply on the next check.",
+                    );
+                  })
+                }
+              >
+                Save endpoint configuration
+              </button>
+            </>
+          ) : (
+            (() => {
+              const result =
+                state?.targets.find((target) => target.id === selected.id)
+                  ?.diagnostic ?? selected.diagnostic;
+              return result ? (
+                <>
+                  <p>
+                    <strong>{result.state}</strong> · Application:{" "}
+                    {result.application} · Network: {result.network} · TLS:{" "}
+                    {result.tls}
+                  </p>
+                  <p>
+                    {result.method} · HTTP{" "}
+                    {result.code ?? "no verified response"} ·{" "}
+                    {result.responseMs} ms · {result.attempts} attempt(s) ·{" "}
+                    {date(result.checkedAt)}
+                  </p>
+                  {result.errorType && (
+                    <p>
+                      {result.errorType}
+                      {result.transportErrorCode
+                        ? " (" + result.transportErrorCode + ")"
+                        : ""}
+                      : {result.errorMessage}
+                    </p>
+                  )}
+                  <ul>
+                    {result.assertions.map((check) => (
+                      <li key={check.name}>
+                        {check.passed ? "Passed" : "Failed"}: {check.name}
+                      </li>
+                    ))}
+                  </ul>
+                  {result.warnings.map((warning) => (
+                    <p role="alert" key={warning}>
+                      {warning}
+                    </p>
+                  ))}
+                  {result.certificate && (
+                    <p>
+                      Certificate issuer: {result.certificate.issuer} · Valid
+                      to: {result.certificate.validTo} · Hostname matches:{" "}
+                      {String(result.certificate.hostnameValid)} ·{" "}
+                      {result.certificate.error}
+                    </p>
+                  )}
+                  {result.diagnostic && (
+                    <p>
+                      Separate UNVERIFIED diagnostic: HEAD{" "}
+                      {result.diagnostic.url} · HTTP{" "}
+                      {result.diagnostic.code ?? "no response"} ·{" "}
+                      {result.diagnostic.responseMs} ms ·{" "}
+                      {result.diagnostic.errorType ?? "HTTP response received"}.
+                      Primary certificate failure remains unresolved.
+                    </p>
+                  )}
+                  <details>
+                    <summary>
+                      Saved configuration and redirect trace (secrets hidden)
+                    </summary>
+                    <pre>
+                      {JSON.stringify(
+                        {
+                          configuration: result.configuration,
+                          redirects: result.redirects,
+                          diagnosticCertificate: result.diagnostic?.certificate,
+                        },
+                        null,
+                        2,
+                      )}
+                    </pre>
+                  </details>
+                  <p>
+                    Response bodies and credentials are intentionally omitted
+                    from previews and check history.
+                  </p>
+                </>
+              ) : (
+                <p>
+                  No detailed check has been recorded for this endpoint yet.
+                </p>
+              );
+            })()
+          )}
+        </section>
       )}
       {showHistory && (
         <>
@@ -209,7 +431,11 @@ export function Monitoring({
                         ? date(outage.onlineAt)
                         : outage.endedAt
                           ? "Recovery not observed (monitoring ended)"
-                          : "Still offline"}
+                          : state?.targets.find(
+                                (target) => target.id === outage.targetId,
+                              )?.status === "unknown"
+                            ? "Recovery not observed (current health unknown)"
+                            : "Still offline"}
                     </td>
                     <td>
                       {outage.durationMs !== null

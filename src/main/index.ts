@@ -1,4 +1,14 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, session } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  session,
+  safeStorage,
+} from "electron";
+import { endpointSchema } from "./utilities/monitorValidation";
+import { redactTree } from "./utilities/redaction";
 import path from "node:path";
 import { mkdirSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -56,7 +66,18 @@ app
       log,
     );
     const exporter = new ExportService(db);
-    monitor = new MonitorService(db, new MonitorStore(db.location), log);
+    monitor = new MonitorService(
+      db,
+      new MonitorStore(db.location, {
+        encrypt: (value) => {
+          if (!safeStorage.isEncryptionAvailable())
+            throw new Error("Secure storage unavailable");
+          return safeStorage.encryptString(value);
+        },
+        decrypt: (value) => safeStorage.decryptString(value),
+      }),
+      log,
+    );
     session.defaultSession.setPermissionRequestHandler(
       (_webContents, _permission, callback) => callback(false),
     );
@@ -68,6 +89,7 @@ app
         if (
           !window ||
           event.sender !== window.webContents ||
+          event.senderFrame !== window.webContents.mainFrame ||
           event.senderFrame?.url !== trusted
         )
           throw new Error("Untrusted IPC sender");
@@ -130,6 +152,15 @@ app
       ),
     );
     handle("monitor:stop", () => monitor.stop());
+    handle("monitor:config", (id) =>
+      monitor.store.publicConfiguration(idSchema.parse(id)),
+    );
+    handle("monitor:configure", (id, config) =>
+      monitor.store.saveConfiguration(
+        idSchema.parse(id),
+        endpointSchema.parse(config),
+      ),
+    );
     handle("monitor:state", (id) =>
       monitor.store.snapshot(idSchema.parse(id), monitor.current),
     );
@@ -146,9 +177,15 @@ app
       );
       return target.filePath;
     });
-    handle("scan:results", (input) => db.results(querySchema.parse(input)));
-    handle("scan:detail", (input) => db.detail(idSchema.parse(input)));
-    handle("scan:dashboard", (input) => db.dashboard(idSchema.parse(input)));
+    handle("scan:results", (input) =>
+      redactTree(db.results(querySchema.parse(input))),
+    );
+    handle("scan:detail", (input) =>
+      redactTree(db.detail(idSchema.parse(input))),
+    );
+    handle("scan:dashboard", (input) =>
+      redactTree(db.dashboard(idSchema.parse(input))),
+    );
     handle("scan:delete", async (input) => {
       const id = idSchema.parse(input);
       if (

@@ -20,7 +20,7 @@ test("protocol selection preserves paths, query values and explicit ports", () =
   assert.deepEqual(protocolUrls("file:///bad", "both"), ["file:///bad"]);
 });
 
-test("HTTP-only server works with automatic fallback, forced schemes and both", async () => {
+test("HTTP-only server keeps automatic scheme, supports explicit schemes and both", async () => {
   const server = http.createServer((req, res) => {
     res.writeHead(req.url === "/missing" ? 404 : 200, {
       "Content-Type": "text/html",
@@ -47,6 +47,7 @@ test("HTTP-only server works with automatic fallback, forced schemes and both", 
       url,
       {
         ...defaults,
+        allowedPrivateHosts: ["127.0.0.1", "localhost", "::1"],
         protocol,
         retries: 0,
         timeout: 500,
@@ -64,10 +65,10 @@ test("HTTP-only server works with automatic fallback, forced schemes and both", 
   try {
     const auto = await run("auto");
     assert.equal(auto.length, 1);
-    assert.equal(auto[0].code, 200);
+    assert.equal(auto[0].code, null);
     assert.equal(auto[0].originalUrl, base + "/ok");
-    assert.equal(auto[0].finalUrl, base.replace("https:", "http:") + "/ok");
-    assert.match(auto[0].label, /HTTP fallback/);
+    assert.equal(auto[0].finalUrl, base + "/ok");
+    assert.doesNotMatch(auto[0].label, /fallback/);
     assert.equal((await run("https"))[0].code, null);
     assert.equal((await run("http"))[0].code, 200);
     const both = await run("both");

@@ -129,6 +129,7 @@ after(async () => {
 });
 const settings: Settings = {
   ...defaults,
+  allowedPrivateHosts: ["127.0.0.1", "localhost", "::1"],
   hostDelay: 0,
   retryDelay: 1,
   retries: 0,

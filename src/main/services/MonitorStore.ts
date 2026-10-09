@@ -6,11 +6,28 @@ import type {
   MonitorTarget,
   Outage,
   UrlResult,
+  EndpointConfig,
+  HealthResult,
+  Settings,
 } from "../../../shared/types";
+import { monitorDefaults } from "../../../shared/monitorDefaults";
+import {
+  publicConfig,
+  redactTree,
+  redactUrl,
+  secretMarker,
+} from "../utilities/redaction";
+export interface SecretCodec {
+  encrypt(value: string): Buffer;
+  decrypt(value: Buffer): string;
+}
 
 export class MonitorStore {
   private db: DatabaseSync;
-  constructor(location: string) {
+  constructor(
+    location: string,
+    private codec?: SecretCodec,
+  ) {
     this.db = new DatabaseSync(location);
     this.db.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;");
     const now = new Date().toISOString();
@@ -65,9 +82,71 @@ export class MonitorStore {
   targets(sessionId: string): MonitorTarget[] {
     return this.db
       .prepare(
-        "SELECT id,session_id AS sessionId,name,url,status,checked_at AS checkedAt,code,response_ms AS responseMs,error FROM monitor_targets WHERE session_id=? ORDER BY name,url",
+        "SELECT id,session_id AS sessionId,name,url,status,checked_at AS checkedAt,code,response_ms AS responseMs,error,diagnostic FROM monitor_targets WHERE session_id=? ORDER BY name,url",
       )
-      .all(sessionId) as unknown as MonitorTarget[];
+      .all(sessionId)
+      .map((row) => ({
+        ...row,
+        diagnostic: row.diagnostic ? JSON.parse(String(row.diagnostic)) : null,
+      })) as unknown as MonitorTarget[];
+  }
+  config(url: string, settings?: Settings): EndpointConfig {
+    const row = this.db
+      .prepare("SELECT configuration,secret FROM endpoint_configs WHERE url=?")
+      .get(url) as
+      { configuration: string; secret: Uint8Array | null } | undefined;
+    if (!row) {
+      const config = monitorDefaults(settings);
+      if (settings)
+        this.db
+          .prepare(
+            "INSERT INTO endpoint_configs(url,configuration,secret) VALUES(?,?,NULL)",
+          )
+          .run(url, JSON.stringify(config));
+      return config;
+    }
+    if (row.secret) {
+      if (!this.codec)
+        throw new Error("Encrypted endpoint settings are unavailable");
+      return JSON.parse(this.codec.decrypt(Buffer.from(row.secret)));
+    }
+    return JSON.parse(row.configuration);
+  }
+  private targetUrl(id: string): string {
+    const row = this.db
+      .prepare("SELECT url FROM monitor_targets WHERE id=?")
+      .get(id) as { url: string } | undefined;
+    if (!row) throw new Error("Unknown monitoring endpoint");
+    return row.url;
+  }
+  publicConfiguration(id: string): EndpointConfig {
+    return publicConfig(this.config(this.targetUrl(id)));
+  }
+  saveConfiguration(id: string, input: EndpointConfig): void {
+    const url = this.targetUrl(id),
+      old = this.config(url);
+    const config = { ...input, headers: { ...input.headers } };
+    for (const [key, value] of Object.entries(config.headers))
+      if (value === secretMarker) config.headers[key] = old.headers[key] ?? "";
+    for (const key of ["body", "expectedText", "jsonExpected"] as const)
+      if (config[key] === secretMarker) config[key] = old[key];
+    const hasSecrets =
+      Object.keys(config.headers).length ||
+      config.body ||
+      config.expectedText ||
+      config.jsonExpected;
+    if (hasSecrets && !this.codec)
+      throw new Error(
+        "Secure credential storage is unavailable; configuration was not saved",
+      );
+    const secret = hasSecrets
+      ? this.codec!.encrypt(JSON.stringify(config))
+      : null;
+    this.db
+      .prepare(
+        "INSERT INTO endpoint_configs(url,configuration,secret) VALUES(?,?,?) ON CONFLICT(url) DO UPDATE SET configuration=excluded.configuration,secret=excluded.secret",
+      )
+      .run(url, JSON.stringify(publicConfig(config)), secret);
   }
   setInterval(id: string, interval: number): void {
     this.db
@@ -76,14 +155,25 @@ export class MonitorStore {
       )
       .run(interval, id);
   }
-  record(target: MonitorTarget, result: UrlResult): void {
-    const status =
-      result.code !== null &&
-      result.code >= 200 &&
-      result.code < 400 &&
-      !result.errorCode
-        ? "online"
-        : "offline";
+  record(
+    target: MonitorTarget,
+    result: UrlResult,
+    diagnostic?: HealthResult,
+  ): void {
+    const status = diagnostic
+      ? diagnostic.application === "unknown"
+        ? "unknown"
+        : diagnostic.state === "Healthy"
+          ? "online"
+          : "offline"
+      : result.category === "ssl"
+        ? "unknown"
+        : result.code !== null &&
+            result.code >= 200 &&
+            result.code < 400 &&
+            !result.errorCode
+          ? "online"
+          : "offline";
     const now = result.checkedAt;
     this.db.exec("BEGIN");
     try {
@@ -109,7 +199,7 @@ export class MonitorStore {
           );
       this.db
         .prepare(
-          "INSERT INTO monitor_checks(target_id,checked_at,status,code,response_ms,error) VALUES(?,?,?,?,?,?)",
+          "INSERT INTO monitor_checks(target_id,checked_at,status,code,response_ms,error,diagnostic) VALUES(?,?,?,?,?,?,?)",
         )
         .run(
           target.id,
@@ -118,10 +208,11 @@ export class MonitorStore {
           result.code,
           result.timings.total,
           result.errorCode,
+          diagnostic ? JSON.stringify(diagnostic) : null,
         );
       this.db
         .prepare(
-          "UPDATE monitor_targets SET status=?,checked_at=?,code=?,response_ms=?,error=? WHERE id=?",
+          "UPDATE monitor_targets SET status=?,checked_at=?,code=?,response_ms=?,error=?,diagnostic=? WHERE id=?",
         )
         .run(
           status,
@@ -129,6 +220,7 @@ export class MonitorStore {
           result.code,
           result.timings.total,
           result.errorCode,
+          diagnostic ? JSON.stringify(diagnostic) : null,
           target.id,
         );
       this.db.exec("COMMIT");
@@ -177,13 +269,21 @@ export class MonitorStore {
     return {
       active,
       sessions,
-      targets: latest ? this.targets(latest.id) : [],
-      outages,
+      targets: latest
+        ? this.targets(latest.id).map((target) => ({
+            ...target,
+            url: redactUrl(target.url),
+          }))
+        : [],
+      outages: outages.map((outage) => ({
+        ...outage,
+        url: redactUrl(outage.url),
+      })),
       checkCount: count.total,
     };
   }
   export(scanId: string): unknown {
-    return {
+    return redactTree({
       ...this.snapshot(scanId, null),
       outages: this.db
         .prepare(
@@ -195,7 +295,7 @@ export class MonitorStore {
           "SELECT c.*,t.name,t.url,t.session_id FROM monitor_checks c JOIN monitor_targets t ON t.id=c.target_id JOIN monitor_sessions s ON s.id=t.session_id WHERE s.scan_id=? ORDER BY c.id",
         )
         .all(scanId),
-    };
+    });
   }
   close(): void {
     this.db.close();

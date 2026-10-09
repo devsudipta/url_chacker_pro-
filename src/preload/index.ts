@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { DesktopApi, Progress } from "../../shared/types";
 const api: DesktopApi = {
+  monitorConfig: (id) => ipcRenderer.invoke("monitor:config", id),
+  monitorSaveConfig: (id, config) =>
+    ipcRenderer.invoke("monitor:configure", id, config),
   monitorStart: (id, interval, settings) =>
     ipcRenderer.invoke("monitor:start", id, interval, settings),
   monitorStop: () => ipcRenderer.invoke("monitor:stop"),

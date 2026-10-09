@@ -45,6 +45,7 @@ test("named URLs survive duplicate parsing, scan storage, searches and report/im
   try {
     const scan = scanner.start("Named", "quick", `Main website | ${url}`, {
       ...defaults,
+      allowedPrivateHosts: ["127.0.0.1", "localhost", "::1"],
       retries: 0,
       hostDelay: 0,
     });
@@ -180,7 +181,13 @@ test("real monitor rechecks, records offline and recovery, changes interval with
   db.saveResult(result);
   scan.status = "completed";
   db.updateScan(scan);
-  const settings = { ...defaults, retries: 0, timeout: 1000, hostDelay: 0 };
+  const settings = {
+    ...defaults,
+    allowedPrivateHosts: ["127.0.0.1", "localhost", "::1"],
+    retries: 0,
+    timeout: 1000,
+    hostDelay: 0,
+  };
   try {
     await assert.rejects(service.start(scan.id, 1, settings), /supported/);
     await service.start(scan.id, 5, settings);

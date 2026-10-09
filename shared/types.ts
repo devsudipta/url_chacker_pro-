@@ -36,6 +36,7 @@ export interface SslInfo {
   error: string | null;
 }
 export interface UrlResult {
+  transportConnected?: boolean;
   name?: string;
   id: string;
   scanId: string;
@@ -68,6 +69,7 @@ export interface SourceLink {
   asset: boolean;
 }
 export interface Settings {
+  allowedPrivateHosts?: string[];
   protocol?: "auto" | "https" | "http" | "both";
   concurrency: number;
   timeout: number;
@@ -142,6 +144,11 @@ export interface Comparison {
   delta: number;
 }
 export interface DesktopApi {
+  monitorConfig: (targetId: string) => Promise<EndpointConfig>;
+  monitorSaveConfig: (
+    targetId: string,
+    config: EndpointConfig,
+  ) => Promise<void>;
   monitorStart: (
     scanId: string,
     interval: number,
@@ -184,6 +191,7 @@ export interface MonitorSession {
   stoppedAt: string | null;
 }
 export interface MonitorTarget {
+  diagnostic?: HealthResult | null;
   id: string;
   sessionId: string;
   name: string;
@@ -193,6 +201,61 @@ export interface MonitorTarget {
   code: number | null;
   responseMs: number | null;
   error: string | null;
+}
+export type DiagnosticState =
+  | "Healthy"
+  | "HTTP Error"
+  | "TLS Certificate Error"
+  | "Connection Refused"
+  | "Timeout"
+  | "DNS Error"
+  | "Network Error"
+  | "Unexpected Response";
+export interface EndpointConfig {
+  method: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
+  headers: Record<string, string>;
+  body: string;
+  connectTimeout: number;
+  responseTimeout: number;
+  retries: number;
+  retryDelay: number;
+  retryUnsafeMethods: boolean;
+  expectedStatuses: number[];
+  expectedText: string;
+  jsonPath: string;
+  jsonExpected: string;
+  maxResponseMs: number | null;
+  insecureDiagnostic: boolean;
+  privateHosts: string[];
+  followRedirects: boolean;
+  redirectOrigins: string[];
+}
+export interface HealthResult {
+  state: DiagnosticState;
+  application: "healthy" | "failed" | "unknown";
+  network: "reachable" | "unreachable" | "unknown";
+  tls: "verified" | "certificate error" | "not applicable" | "unknown";
+  method: string;
+  code: number | null;
+  responseMs: number;
+  checkedAt: string;
+  attempts: number;
+  errorType: string | null;
+  transportErrorCode?: string | null;
+  errorMessage: string | null;
+  assertions: { name: string; passed: boolean }[];
+  warnings: string[];
+  configuration: EndpointConfig;
+  certificate: SslInfo | null;
+  redirects: Redirect[];
+  diagnostic: {
+    url: string;
+    verified: false;
+    code: number | null;
+    responseMs: number;
+    errorType: string | null;
+    certificate: SslInfo | null;
+  } | null;
 }
 export interface Outage {
   id: string;

@@ -1,17 +1,18 @@
 import type { MonitorSession, Settings } from "../../../shared/types";
 import { DatabaseService } from "../database/DatabaseService";
 import { MonitorStore } from "./MonitorStore";
-import { HttpProbeService, abortableDelay } from "./HttpProbeService";
+import { abortableDelay } from "./HttpProbeService";
+import { HealthCheckService } from "./HealthCheckService";
+import { createResult } from "../utilities/result";
 import { QueueService } from "./QueueService";
 import { normalizeUrl } from "../utilities/url";
-import { protocolUrls } from "../utilities/protocol";
 
 export const monitorIntervals = [5, 10, 20, 30, 60, 120, 300, 600];
 export class MonitorService {
   current: MonitorSession | null = null;
   private controller: AbortController | null = null;
   private pending: Promise<void> | null = null;
-  private probe = new HttpProbeService();
+  private probe = new HealthCheckService();
   private commands: Promise<void> = Promise.resolve();
   private waitController: AbortController | null = null;
   constructor(
@@ -52,14 +53,12 @@ export class MonitorService {
       try {
         if (result.category === "invalid" || result.category === "skipped")
           return [];
-        return protocolUrls(result.originalUrl, settings.protocol).flatMap(
-          (raw) => {
-            const url = normalizeUrl(raw);
-            if (seen.has(url)) return [];
-            seen.add(url);
-            return [{ name: result.name ?? "", url }];
-          },
-        );
+        return [result.url].flatMap((raw) => {
+          const url = normalizeUrl(raw);
+          if (seen.has(url)) return [];
+          seen.add(url);
+          return [{ name: result.name ?? "", url }];
+        });
       } catch {
         return [];
       }
@@ -71,7 +70,7 @@ export class MonitorService {
     this.controller = new AbortController();
     const session = this.current,
       signal = this.controller.signal;
-    this.pending = this.loop(session, { ...settings, retries: 0 }, signal)
+    this.pending = this.loop(session, settings, signal)
       .catch((error) => {
         if (!signal.aborted) this.log(error);
       })
@@ -99,35 +98,23 @@ export class MonitorService {
             while (!signal.aborted) {
               const target = targets[cursor++];
               if (!target) return;
-              let output = await this.probe.probe(
+              const config = this.store.config(target.url, settings);
+              const diagnostic = await this.probe.check(
                 target.url,
                 session.scanId,
                 settings,
+                config,
                 signal,
-                0,
                 (u) => queue.acquire(u),
               );
-              if (
-                !signal.aborted &&
-                (settings.protocol ?? "auto") === "auto" &&
-                target.url.startsWith("https:") &&
-                output.result.code === null &&
-                output.result.errorCode
-              ) {
-                const url = new URL(target.url);
-                url.protocol = "http:";
-                output = await this.probe.probe(
-                  url.href,
-                  session.scanId,
-                  settings,
-                  signal,
-                  0,
-                  (u) => queue.acquire(u),
-                );
-              }
               if (signal.aborted) return;
-              output.result.checkedAt = new Date().toISOString();
-              this.store.record(target, output.result);
+              diagnostic.checkedAt = new Date().toISOString();
+              const result = createResult(target.url, session.scanId, 0);
+              result.code = diagnostic.code;
+              result.timings.total = diagnostic.responseMs;
+              result.checkedAt = diagnostic.checkedAt;
+              result.errorCode = diagnostic.errorType;
+              this.store.record(target, result, diagnostic);
             }
           },
         ),

@@ -6,6 +6,17 @@ Every published version has a separate Git tag and GitHub Release. Executables a
 
 Record future fixes here as they are implemented. No additional fixes are claimed yet.
 
+## 1.2.5 — 2026-10-09
+
+- Distinguish Healthy, HTTP Error, TLS Certificate Error, Connection Refused, Timeout, DNS Error, Network Error and Unexpected Response; display application, network and TLS indicators separately.
+- Add saved per-endpoint GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS requests, headers/body, connection/response timeouts, retries/backoff and status/text/JSON/timing expectations.
+- Remove automatic HTTPS-to-HTTP fallback from scans and monitoring; preserve original certificate failures and configured methods. Explicit protocol selection remains available.
+- Add opt-in, clearly warned, isolated insecure HEAD TLS diagnostics; a diagnostic response never becomes verified HTTPS health.
+- Preserve query ordering and duplicate/empty names, decode compressed responses, retain actual status and detailed check history through an additive database migration.
+- Encrypt API configuration secrets with Windows safeStorage, mask preview/export query values, suppress secret-bearing logs and response-body previews.
+- Enforce trusted-main-frame IPC, explicit private-host authorization, validated/pinned DNS and safe redirects; block metadata/link-local addresses and protect cross-origin credentials/bodies.
+- Preserve prior scans, names, history and outage durations; TLS-only failures do not fabricate application outages or recoveries.
+
 ### Build automation
 
 - Disable electron-builder's implicit tag-triggered publication; the release workflow attaches files explicitly.

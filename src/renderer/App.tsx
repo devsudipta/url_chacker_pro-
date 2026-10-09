@@ -254,7 +254,7 @@ export function App(): React.JSX.Element {
         </nav>
         <div className="sidebar-footer">
           <i className="online-dot" /> All data stored locally
-          <span>Version 1.2.0 · Windows x64</span>
+          <span>Version 1.2.5 · Windows x64</span>
         </div>
       </aside>
       <main>
@@ -733,7 +733,7 @@ export function App(): React.JSX.Element {
                       }
                     >
                       <option value="auto">
-                        Automatic (HTTPS → HTTP fallback)
+                        Automatic (preserve entered scheme)
                       </option>
                       <option value="https">HTTPS only</option>
                       <option value="http">HTTP only</option>
@@ -741,8 +741,9 @@ export function App(): React.JSX.Element {
                     </select>
                   </label>
                   <p>
-                    Automatic keeps the entered scheme and tries HTTP if HTTPS
-                    cannot connect. Both checks each scheme separately.
+                    Automatic preserves the entered scheme; no fallback occurs.
+                    HTTPS only and HTTP only explicitly change the scheme. Both
+                    checks each scheme separately.
                   </p>
                   <label>
                     Concurrent workers
@@ -907,7 +908,10 @@ export function App(): React.JSX.Element {
                 </div>
               </div>
               <Monitoring scanId={selected} settings={settings} />
-              <p>Original scan snapshot below. Current URL status and outage records appear in the live monitoring table above.</p>
+              <p>
+                Original scan snapshot below. Current URL status and outage
+                records appear in the live monitoring table above.
+              </p>
               <section className="panel results-panel">
                 <div className="table-toolbar">
                   <input
@@ -1353,6 +1357,26 @@ export function App(): React.JSX.Element {
                     </label>
                   ))}
                   <label>
+                    Authorized private hostnames (comma separated)
+                    <input
+                      aria-label="Authorized private hostnames"
+                      value={(settings.allowedPrivateHosts ?? []).join(", ")}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          allowedPrivateHosts: e.target.value
+                            .split(",")
+                            .map((host) => host.trim())
+                            .filter(Boolean),
+                        })
+                      }
+                    />
+                    <small>
+                      Only grant exact local hosts you own or are authorized to
+                      monitor. Metadata and link-local addresses remain blocked.
+                    </small>
+                  </label>
+                  <label>
                     User-Agent
                     <input
                       value={settings.userAgent}
@@ -1431,7 +1455,7 @@ export function App(): React.JSX.Element {
           {page === "Settings" && (
             <section className="panel">
               <h3>Developer information</h3>
-              <p>Developed by Sudipta Roy Akash · Version 1.2.0</p>
+              <p>Developed by Sudipta Roy Akash · Version 1.2.5</p>
               <p>
                 Website:{" "}
                 <button
@@ -1461,7 +1485,7 @@ export function App(): React.JSX.Element {
               >
                 sudiptaroy.dev
               </button>
-              ) · v1.2.0
+              ) · v1.2.5
             </span>
             <span>
               {active ? "Scan in progress" : `${history.length} saved scans`} ·

@@ -16,6 +16,8 @@ import type {
 } from "../../../shared/types";
 import { normalizeUrl } from "../utilities/url";
 import { createResult } from "../utilities/result";
+import { safeLookup, validateLiteral } from "./TargetPolicy";
+import { gunzipSync, inflateSync, brotliDecompressSync } from "node:zlib";
 import {
   classify,
   networkError,
@@ -42,6 +44,10 @@ export interface HttpResponseCapture {
   httpVersion: string;
 }
 export interface HttpRequestOptions {
+  connectTimeout?: number;
+  responseTimeout?: number;
+  insecureDiagnostic?: boolean;
+  preserveMethod?: boolean;
   method?: HttpMethod;
   headers?: Record<string, string>;
   body?: Buffer;
@@ -122,6 +128,7 @@ export class HttpProbeService {
         result.timings = hop.timings;
         result.ssl = hop.ssl;
         result.code = hop.code;
+        result.transportConnected = true;
         result.contentType = hop.contentType;
         result.contentLength = hop.length;
         retryAfter = hop.retryAfter;
@@ -152,9 +159,23 @@ export class HttpProbeService {
           });
           options.beforeRedirect?.(current, destination, hop.code);
           if (
+            new URL(current).protocol === "https:" &&
+            new URL(destination).protocol !== "https:"
+          )
+            throw Object.assign(new Error("HTTPS downgrade redirect blocked"), {
+              code: "UNSAFE_REDIRECT",
+            });
+          if (
             (hop.code === 303 && method !== "GET" && method !== "HEAD") ||
             ([301, 302].includes(hop.code) && method === "POST")
           ) {
+            if (options.preserveMethod)
+              throw Object.assign(
+                new Error(
+                  "Redirect would change the configured method; check the destination explicitly",
+                ),
+                { code: "METHOD_REDIRECT_BLOCKED" },
+              );
             method = "GET";
             requestBody = undefined;
             headers = Object.fromEntries(
@@ -169,6 +190,24 @@ export class HttpProbeService {
             );
           }
           if (new URL(current).origin !== new URL(destination).origin) {
+            if (
+              requestBody?.length ||
+              Object.keys(headers).some(
+                (name) =>
+                  ![
+                    "accept",
+                    "accept-encoding",
+                    "user-agent",
+                    "cache-control",
+                  ].includes(name.toLowerCase()),
+              )
+            )
+              throw Object.assign(
+                new Error(
+                  "Cross-origin redirect blocked to protect credentials and request body",
+                ),
+                { code: "CREDENTIAL_REDIRECT_BLOCKED" },
+              );
             headers = Object.fromEntries(
               Object.entries(headers).filter(([name]) =>
                 [
@@ -193,6 +232,12 @@ export class HttpProbeService {
       }
     } catch (error) {
       if (signal.aborted) throw error;
+      const transport = error as {
+        transportConnected?: boolean;
+        timings?: Timings;
+      };
+      result.transportConnected = transport.transportConnected ?? false;
+      if (transport.timings) result.timings = transport.timings;
       const classified = networkError(error);
       result.category = classified.category;
       result.label = classified.friendly;
@@ -212,10 +257,19 @@ export class HttpProbeService {
     signal: AbortSignal,
     depth = 0,
     gate?: (url: string) => Promise<() => void>,
+    options: HttpRequestOptions = {},
   ): Promise<ProbeOutput> {
     let output: ProbeOutput;
     for (let attempt = 0; ; attempt++) {
-      output = await this.probe(original, scanId, s, signal, depth, gate);
+      output = await this.probe(
+        original,
+        scanId,
+        s,
+        signal,
+        depth,
+        gate,
+        options,
+      );
       output.result.attempts = attempt + 1;
       if (attempt >= s.retries || !shouldRetry(output.result)) return output;
       await abortableDelay(
@@ -251,11 +305,15 @@ export class HttpProbeService {
         total: 0,
       };
       const parsed = new URL(url);
+      validateLiteral(parsed, settings.allowedPrivateHosts ?? []);
       const req = (parsed.protocol === "https:" ? https : http).request(
         parsed,
         {
           method: options.method ?? "GET",
           agent: false,
+          ...{ autoSelectFamily: true },
+          lookup: safeLookup(settings.allowedPrivateHosts ?? []),
+          rejectUnauthorized: options.insecureDiagnostic !== true,
           signal,
           headers: {
             "user-agent": settings.userAgent,
@@ -305,6 +363,7 @@ export class HttpProbeService {
             if (finished) return;
             finished = true;
             clearTimeout(timer);
+            clearTimeout(responseTimer);
             timings.download = Math.round(performance.now() - firstByte);
             timings.total = Math.round(performance.now() - begun);
             const retry = response.headers["retry-after"];
@@ -313,7 +372,36 @@ export class HttpProbeService {
               retryAfter = /^\d+$/.test(retry)
                 ? Number(retry) * 1000
                 : Math.max(0, Date.parse(retry) - Date.now()) || 0;
-            captured.bytes = Buffer.concat(chunks);
+            try {
+              const compressed = Buffer.concat(chunks);
+              const encoding = String(
+                response.headers["content-encoding"] ?? "identity",
+              ).toLowerCase();
+              const limit = { maxOutputLength: 10 * 1024 * 1024 };
+              captured.bytes =
+                !capture ||
+                options.method === "HEAD" ||
+                [204, 304].includes(response.statusCode ?? 0) ||
+                encoding === "identity"
+                  ? compressed
+                  : encoding === "gzip"
+                    ? gunzipSync(compressed, limit)
+                    : encoding === "deflate"
+                      ? inflateSync(compressed, limit)
+                      : encoding === "br"
+                        ? brotliDecompressSync(compressed, limit)
+                        : (() => {
+                            throw new Error("Unsupported response encoding");
+                          })();
+            } catch {
+              reject(
+                Object.assign(
+                  new Error("Response could not be decoded safely"),
+                  { code: "RESPONSE_DECODE_ERROR" },
+                ),
+              );
+              return;
+            }
             resolve({
               code: response.statusCode ?? 0,
               location: response.headers.location,
@@ -332,19 +420,40 @@ export class HttpProbeService {
         if (!finished) {
           finished = true;
           clearTimeout(timer);
-          reject(error);
+          clearTimeout(responseTimer);
+          reject(
+            Object.assign(error, {
+              transportConnected: connectEnd !== null,
+              timings: {
+                ...timings,
+                total: Math.round(performance.now() - begun),
+              },
+            }),
+          );
         }
       }
       const timer = setTimeout(
         () =>
           req.destroy(
-            Object.assign(
-              new Error(`Request exceeded ${settings.timeout} ms`),
-              { code: "ETIMEDOUT" },
-            ),
+            Object.assign(new Error("Connection timeout (DNS, TCP or TLS)"), {
+              code: "ETIMEDOUT",
+            }),
           ),
-        settings.timeout,
+        options.connectTimeout ?? settings.timeout,
       );
+      let responseTimer: ReturnType<typeof setTimeout> | undefined;
+      const connected = (): void => {
+        clearTimeout(timer);
+        responseTimer = setTimeout(
+          () =>
+            req.destroy(
+              Object.assign(new Error("Response timeout"), {
+                code: "ETIMEDOUT",
+              }),
+            ),
+          options.responseTimeout ?? settings.timeout,
+        );
+      };
       req.on("error", fail);
       req.on("socket", (socket) => {
         socket.once("lookup", () => {
@@ -354,6 +463,7 @@ export class HttpProbeService {
         socket.once("connect", () => {
           connectEnd = performance.now();
           timings.tcp = Math.round(connectEnd - (dnsEnd ?? begun));
+          if (parsed.protocol === "http:") connected();
         });
         if (parsed.protocol === "https:") {
           const tls = socket as TLSSocket;
@@ -379,6 +489,7 @@ export class HttpProbeService {
             certificate(ssl);
           };
           tls.once("secureConnect", () => {
+            connected();
             secureEnd = performance.now();
             timings.tls =
               connectEnd === null ? null : Math.round(secureEnd - connectEnd);

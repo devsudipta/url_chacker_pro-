@@ -255,36 +255,6 @@ export class ScanService {
                   signal,
                   job.depth,
                 );
-          if (
-            !signal.aborted &&
-            normalized &&
-            (settings.protocol ?? "auto") === "auto" &&
-            new URL(normalizeUrl(job.url)).protocol === "https:" &&
-            output.result.code === null &&
-            output.result.errorCode
-          ) {
-            const alternative = new URL(normalizeUrl(job.url));
-            alternative.protocol = "http:";
-            const original = job.url;
-            output = await this.probe.withRetries(
-              alternative.href,
-              scan.id,
-              settings,
-              signal,
-              job.depth,
-              async (u) => {
-                const policy = await robotsAllowed(u);
-                if (policy !== true)
-                  throw Object.assign(
-                    new Error("HTTP fallback excluded by robots policy"),
-                    { code: "ROBOTS_DISALLOWED" },
-                  );
-                return this.queue!.acquire(u);
-              },
-            );
-            output.result.originalUrl = original;
-            output.result.label += " (HTTP fallback)";
-          }
           if (signal.aborted) return;
           const result = output.result;
           result.name = normalized
