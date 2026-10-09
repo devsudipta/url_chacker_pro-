@@ -12,4 +12,13 @@ CREATE INDEX idx_sources_target ON discovered_links(scan_id,normalized_target_ur
 CREATE TABLE ssl_results(url_result_id TEXT PRIMARY KEY REFERENCES url_results(id) ON DELETE CASCADE, valid INTEGER NOT NULL, issuer TEXT, subject TEXT, valid_from TEXT, valid_to TEXT, days_remaining INTEGER, hostname_valid INTEGER, error TEXT);
 CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
 `,
+  `
+CREATE TABLE monitor_sessions(id TEXT PRIMARY KEY,scan_id TEXT NOT NULL REFERENCES scans(id) ON DELETE CASCADE,interval_seconds INTEGER NOT NULL,status TEXT NOT NULL,started_at TEXT NOT NULL,stopped_at TEXT);
+CREATE TABLE monitor_targets(id TEXT PRIMARY KEY,session_id TEXT NOT NULL REFERENCES monitor_sessions(id) ON DELETE CASCADE,name TEXT NOT NULL,url TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'unknown',checked_at TEXT,code INTEGER,response_ms REAL,error TEXT);
+CREATE TABLE monitor_checks(id INTEGER PRIMARY KEY,target_id TEXT NOT NULL REFERENCES monitor_targets(id) ON DELETE CASCADE,checked_at TEXT NOT NULL,status TEXT NOT NULL,code INTEGER,response_ms REAL,error TEXT);
+CREATE INDEX idx_monitor_checks ON monitor_checks(target_id,checked_at);
+CREATE TABLE outages(id TEXT PRIMARY KEY,target_id TEXT NOT NULL REFERENCES monitor_targets(id) ON DELETE CASCADE,offline_at TEXT NOT NULL,online_at TEXT,ended_at TEXT,duration_ms REAL);
+CREATE UNIQUE INDEX idx_open_outage ON outages(target_id) WHERE ended_at IS NULL;
+CREATE INDEX idx_monitor_session ON monitor_sessions(scan_id,started_at);
+`,
 ];

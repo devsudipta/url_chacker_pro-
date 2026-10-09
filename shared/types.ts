@@ -36,6 +36,7 @@ export interface SslInfo {
   error: string | null;
 }
 export interface UrlResult {
+  name?: string;
   id: string;
   scanId: string;
   originalUrl: string;
@@ -86,6 +87,7 @@ export interface Settings {
   theme: "dark" | "light" | "system";
 }
 export interface ImportSummary {
+  names?: Record<string, string>;
   urls: string[];
   invalid: string[];
   imported: number;
@@ -140,6 +142,14 @@ export interface Comparison {
   delta: number;
 }
 export interface DesktopApi {
+  monitorStart: (
+    scanId: string,
+    interval: number,
+    settings: Settings,
+  ) => Promise<void>;
+  monitorStop: () => Promise<void>;
+  monitorState: (scanId: string) => Promise<MonitorSnapshot>;
+  monitorExport: (scanId: string) => Promise<string | null>;
   settings: () => Promise<{ settings: Settings; location: string }>;
   saveSettings: (settings: Settings) => Promise<Settings>;
   importFiles: () => Promise<ImportSummary | null>;
@@ -164,4 +174,40 @@ export interface DesktopApi {
   compare: (first: string, second: string) => Promise<Comparison[]>;
   openUrl: (url: string) => Promise<void>;
   onProgress: (callback: (progress: Progress) => void) => () => void;
+}
+export interface MonitorSession {
+  id: string;
+  scanId: string;
+  interval: number;
+  status: "running" | "stopped" | "interrupted";
+  startedAt: string;
+  stoppedAt: string | null;
+}
+export interface MonitorTarget {
+  id: string;
+  sessionId: string;
+  name: string;
+  url: string;
+  status: "unknown" | "online" | "offline";
+  checkedAt: string | null;
+  code: number | null;
+  responseMs: number | null;
+  error: string | null;
+}
+export interface Outage {
+  id: string;
+  targetId: string;
+  name: string;
+  url: string;
+  offlineAt: string;
+  onlineAt: string | null;
+  endedAt: string | null;
+  durationMs: number | null;
+}
+export interface MonitorSnapshot {
+  active: MonitorSession | null;
+  sessions: MonitorSession[];
+  targets: MonitorTarget[];
+  outages: Outage[];
+  checkCount: number;
 }

@@ -12,6 +12,11 @@ test.setTimeout(process.env.URLCHECKER_TEST_EXE ? 180000 : 60000);
 
 test("real desktop: scan, detail, themes, persistence and preload isolation", async () => {
   const server = http.createServer((req, res) => {
+    if (req.url === "/monitor") {
+      res.writeHead(monitorOffline ? 503 : 200);
+      res.end("monitor");
+      return;
+    }
     if (req.url === "/missing") {
       res.writeHead(404);
       res.end("missing");
@@ -24,6 +29,7 @@ test("real desktop: scan, detail, themes, persistence and preload isolation", as
     }
     res.end("ok");
   });
+  let monitorOffline = false;
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   const storage = path.resolve("test-artifacts", `desktop-${Date.now()}`);
@@ -126,7 +132,7 @@ test("real desktop: scan, detail, themes, persistence and preload isolation", as
     await expect(page.locator(".workspace-footer")).toContainText(
       "Developed by Sudipta Roy Akash",
     );
-    await expect(page.locator(".workspace-footer")).toContainText("1.0.2");
+    await expect(page.locator(".workspace-footer")).toContainText("1.2.0");
     await expect(page.getByLabel("URL protocol")).toHaveValue("auto");
     await page.getByLabel("URL protocol").selectOption("both");
     await page.getByLabel("URL protocol").selectOption("auto");
@@ -186,6 +192,104 @@ test("real desktop: scan, detail, themes, persistence and preload isolation", as
       path: "test-artifacts/desktop-light.png",
       fullPage: true,
     });
+    await page.getByRole("button", { name: "Quick Scan", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: "URLs to check", exact: true })
+      .fill("");
+    await page.getByLabel("URL name", { exact: true }).fill("Main website");
+    await page.getByLabel("Named URL", { exact: true }).fill(`${base}/monitor`);
+    await page.getByRole("button", { name: "Add URL", exact: true }).click();
+    await expect(
+      page.getByRole("textbox", { name: "URLs to check", exact: true }),
+    ).toHaveValue(`Main website | ${base}/monitor`);
+    await page.getByRole("button", { name: "Start scan" }).click();
+    await expect(page.getByText(/1 checked · completed/)).toBeVisible();
+    await expect(
+      page.locator(".results-panel tbody tr").first().locator("td").first(),
+    ).toHaveText("Main website");
+    const monitoring = page.getByRole("region", {
+      name: "URL monitoring",
+      exact: true,
+    });
+    await monitoring
+      .getByLabel("Recheck interval", { exact: true })
+      .selectOption("5");
+    await monitoring
+      .getByRole("button", { name: "Start monitoring", exact: true })
+      .click();
+    await expect(monitoring.locator(".status")).toHaveText("online");
+    monitorOffline = true;
+    await expect(monitoring.locator(".status")).toHaveText("offline", {
+      timeout: 15000,
+    });
+    await monitoring
+      .getByRole("button", { name: "Show outage history", exact: true })
+      .click();
+    await expect(
+      monitoring
+        .getByRole("table", { name: "Outage history" })
+        .locator("tbody tr"),
+    ).toHaveCount(1);
+    await expect(
+      monitoring.getByRole("table", { name: "Outage history" }),
+    ).toContainText("Still offline");
+    await monitoring
+      .getByLabel("Recheck interval", { exact: true })
+      .selectOption("10");
+    await monitoring
+      .getByRole("button", { name: "Apply interval", exact: true })
+      .click();
+    await expect(monitoring.getByRole("status")).toContainText(
+      "every 10 seconds",
+    );
+    monitorOffline = false;
+    await monitoring
+      .getByLabel("Recheck interval", { exact: true })
+      .selectOption("5");
+    await monitoring
+      .getByRole("button", { name: "Apply interval", exact: true })
+      .click();
+    await expect(monitoring.locator(".status")).toHaveText("online", {
+      timeout: 15000,
+    });
+    await expect(
+      monitoring.getByRole("table", { name: "Outage history" }),
+    ).not.toContainText("Still offline");
+    await expect(
+      monitoring.getByRole("table", { name: "Outage history" }),
+    ).toContainText("0h");
+    await monitoring
+      .getByRole("button", { name: "Stop monitoring", exact: true })
+      .click();
+    await expect(monitoring.getByRole("status")).toContainText(
+      "Monitoring stopped",
+    );
+    await page.screenshot({
+      path: "test-artifacts/monitoring-1.2.0.png",
+      fullPage: true,
+    });
+    await application.close();
+    application = await launch();
+    page = await application.firstWindow();
+    await page
+      .getByRole("button", { name: "URL Results", exact: true })
+      .click();
+    const restored = page.getByRole("region", {
+      name: "URL monitoring",
+      exact: true,
+    });
+    await restored
+      .getByRole("button", { name: "Show outage history", exact: true })
+      .click();
+    await expect(
+      restored.getByRole("table", { name: "Outage history" }),
+    ).toContainText("Main website");
+    await expect(
+      restored.getByRole("table", { name: "Outage history" }),
+    ).toContainText("0h");
+    await expect(restored.getByRole("status")).toContainText(
+      "Monitoring stopped",
+    );
     expect(errors).toEqual([]);
   } finally {
     await application.close();

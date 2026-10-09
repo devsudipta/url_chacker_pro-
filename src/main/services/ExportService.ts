@@ -16,6 +16,7 @@ const escape = (s: unknown): string =>
       ]!,
   );
 const headers = [
+  "Name",
   "URL",
   "Status",
   "HTTP code",
@@ -33,6 +34,7 @@ const headers = [
   "Attempts",
 ];
 const values = (r: UrlResult): unknown[] => [
+  r.name ?? "",
   r.url,
   r.label,
   r.code,
@@ -117,7 +119,7 @@ export class ExportService {
           ),
         );
         sheet.views = [{ state: "frozen", ySplit: 1 }];
-        sheet.autoFilter = { from: "A1", to: "O1" };
+        sheet.autoFilter = { from: "A1", to: "P1" };
       }
       const sourceSheet = workbook.addWorksheet("Source Pages");
       sourceSheet.addRow([
@@ -164,7 +166,7 @@ export class ExportService {
     }
     await writeFile(
       file,
-      `<!doctype html><html lang="en"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>URL Checker Pro report</title><style>body{font:14px system-ui;margin:40px;color:#172a2b}table{border-collapse:collapse;width:100%}td,th{padding:12px;border-bottom:1px solid #ddd;text-align:left;word-break:break-all}h1{color:#154e45}th{background:#edf4f2}</style><h1>URL Checker Pro · Scan report</h1><p>${escape(new Date().toISOString())} · ${results.length} URLs · ${summary.counts.broken ?? 0} broken · Average ${Math.round(summary.average ?? 0)} ms</p><table><thead><tr>${["URL", "Status", "HTTP", "Time", "Error", "Source pages"].map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${results.map((r) => `<tr><td>${escape(r.url)}</td><td>${escape(r.label)}</td><td>${escape(r.code)}</td><td>${r.timings.total} ms</td><td>${escape(r.errorCode)}</td><td>${(sourceMap.get(r.url) ?? []).map(escape).join("<br>")}</td></tr>`).join("")}</tbody></table></html>`,
+      `<!doctype html><html lang="en"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>URL Checker Pro report</title><style>body{font:14px system-ui;margin:40px;color:#172a2b}table{border-collapse:collapse;width:100%}td,th{padding:12px;border-bottom:1px solid #ddd;text-align:left;word-break:break-all}h1{color:#154e45}th{background:#edf4f2}</style><h1>URL Checker Pro · Scan report</h1><p>${escape(new Date().toISOString())} · ${results.length} URLs · ${summary.counts.broken ?? 0} broken · Average ${Math.round(summary.average ?? 0)} ms</p><table><thead><tr>${["Name", "URL", "Status", "HTTP", "Time", "Error", "Source pages"].map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${results.map((r) => `<tr><td>${escape(r.name)}</td><td>${escape(r.url)}</td><td>${escape(r.label)}</td><td>${escape(r.code)}</td><td>${r.timings.total} ms</td><td>${escape(r.errorCode)}</td><td>${(sourceMap.get(r.url) ?? []).map(escape).join("<br>")}</td></tr>`).join("")}</tbody></table></html>`,
     );
   }
 }

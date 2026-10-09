@@ -10,7 +10,7 @@ import { DatabaseService } from "../database/DatabaseService";
 import { HttpProbeService, abortableDelay } from "./HttpProbeService";
 import { QueueService } from "./QueueService";
 import { discoverLinks } from "./CrawlerService";
-import { summarize, normalizeUrl } from "../utilities/url";
+import { summarize, normalizeUrl, parseNamedUrl } from "../utilities/url";
 import { createResult } from "../utilities/result";
 import { protocolUrls } from "../utilities/protocol";
 
@@ -49,8 +49,9 @@ export class ScanService {
       .map((line) => line.trim())
       .filter(Boolean)) {
       try {
-        const normalized = normalizeUrl(raw);
-        if (!originals.has(normalized)) originals.set(normalized, raw);
+        const entered = parseNamedUrl(raw).url;
+        const normalized = normalizeUrl(entered);
+        if (!originals.has(normalized)) originals.set(normalized, entered);
       } catch {
         /* Invalid entries remain diagnostic results. */
       }
@@ -66,6 +67,11 @@ export class ScanService {
         inputUrls.flatMap((raw) => protocolUrls(raw, settings.protocol)),
       ),
     ];
+    const names = new Map<string, string>();
+    for (const [url, name] of Object.entries(summary.names ?? {})) {
+      for (const target of protocolUrls(url, settings.protocol))
+        names.set(normalizeUrl(target), name);
+    }
     const base = mode === "crawl" ? normalizeUrl(urls[0]) : null;
     const scan = this.db.createScan(
       name ||
@@ -79,7 +85,13 @@ export class ScanService {
     this.controller = new AbortController();
     this.queue = new QueueService(settings, this.controller.signal);
     this.timer = setInterval(() => this.emit(), 300);
-    this.stopping = this.run(scan, urls, settings, this.controller.signal)
+    this.stopping = this.run(
+      scan,
+      urls,
+      settings,
+      this.controller.signal,
+      names,
+    )
       .catch((error) => {
         this.log(error);
         scan.status = "interrupted";
@@ -129,6 +141,7 @@ export class ScanService {
     urls: string[],
     settings: Settings,
     signal: AbortSignal,
+    names: Map<string, string> = new Map(),
   ): Promise<void> {
     const jobs: Job[] = urls.map((url) => ({
       url,
@@ -274,6 +287,9 @@ export class ScanService {
           }
           if (signal.aborted) return;
           const result = output.result;
+          result.name = normalized
+            ? (names.get(normalizeUrl(job.url)) ?? "")
+            : "";
           this.db.saveResult(result);
           scan.checked++;
           scan.counts[result.category] =

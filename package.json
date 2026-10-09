@@ -1,6 +1,6 @@
 {
   "name": "url-checker-pro",
-  "version": "1.0.2",
+  "version": "1.2.0",
   "description": "Local Windows URL diagnostics and website crawler",
   "author": "Sudipta Roy Akash <hello@sudiptaroy.dev> (https://sudiptaroy.dev)",
   "private": true,

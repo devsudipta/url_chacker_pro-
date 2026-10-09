@@ -2,6 +2,21 @@
 
 Verified on Windows x64 on October 5, 2026. This record distinguishes implemented/automated checks from manual release checks.
 
+## Version 1.2.0 — October 9, 2026
+
+Type checking, lint and production build passed. All 19 integration tests passed: the original scanner/protocol coverage plus named URL/import/export/search tests, additive SQLite migration and outage transition/persistence tests, and a real repeating HTTP monitor test with failure, recovery, interval changes and cancellation.
+
+The real Electron desktop test passed across three launches. It exercised the Name/URL form, names before URLs, 5/10-second interval selection, real 503 offline detection, recovery and saved duration, interval changes without losing the outage, stopping and restored history. The monitoring screenshot is `test-artifacts/monitoring-1.2.0.png`.
+
+Monitoring records observed times rather than the unmeasured instant a remote endpoint changes. Closing/stopping interrupts observation without inventing recovery. Sessions are not automatically resumed after reopening. Original scan snapshots remain unchanged; monitoring stores every check and exports separate complete JSON history.
+
+Both Windows distribution builds succeeded. Packaged metadata reports `1.2.0.0`, company `Sudipta Roy Akash`. Installer wizard/install/uninstall interactions were not repeated for this version.
+
+The actual `URLChecker-Portable-1.2.0.exe` passed the complete desktop test across three launches, including named entry, offline/recovery records, interval changes, cancellation, original scanner functionality, themes and persisted outage durations.
+
+- Installer: `dist/URLChecker-Setup-1.2.0.exe`, 116,990,852 bytes. SHA-256: `7E555B24BF06FFFA29C8B296E57F1AAAC887D6ADA0056103718A511868587BB8`.
+- Portable: `dist/URLChecker-Portable-1.2.0.exe`, 103,146,078 bytes. SHA-256: `3D7DC81BFF82A320A9553AC667DCB3D08F362DCBE3FA2A7BE72CAFB8485E3D99`.
+
 ## Version 1.0.2
 
 API Checker has been removed, including its UI, IPC methods and request service. Existing saved history is retained. The scan UI offers Automatic, HTTPS only, HTTP only and Both. Automatic retries failed HTTPS connections over HTTP and labels fallback results; Both records separate scheme results. Developer information and the footer identify Sudipta Roy Akash, sudiptaroy.dev, GitHub devsudipta and hello@sudiptaroy.dev.

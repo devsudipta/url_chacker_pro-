@@ -11,6 +11,7 @@ import type {
   UrlResult,
 } from "../../shared/types";
 import { defaults } from "../../shared/defaults";
+import { Monitoring } from "./features/Monitoring";
 const api = window.desktop;
 const pages = [
   "Dashboard",
@@ -46,6 +47,8 @@ export function App(): React.JSX.Element {
   const [text, setText] = useState(""),
     [name, setName] = useState(""),
     [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [entryName, setEntryName] = useState(""),
+    [entryUrl, setEntryUrl] = useState("");
   const [data, setData] = useState<ResultsPage>({ rows: [], total: 0 }),
     [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [search, setSearch] = useState(""),
@@ -198,7 +201,14 @@ export function App(): React.JSX.Element {
   };
   const imported = (value: ImportSummary | null): void => {
     if (value) {
-      setText([...value.urls, ...value.invalid].join("\n"));
+      setText(
+        [
+          ...value.urls.map((url) =>
+            value.names?.[url] ? `${value.names[url]} | ${url}` : url,
+          ),
+          ...value.invalid,
+        ].join("\n"),
+      );
       setSummary(value);
       setNotice(
         `${value.imported.toLocaleString()} imported · ${value.duplicates} duplicates removed · ${value.invalid.length} invalid · ${value.urls.length} ready`,
@@ -244,7 +254,7 @@ export function App(): React.JSX.Element {
         </nav>
         <div className="sidebar-footer">
           <i className="online-dot" /> All data stored locally
-          <span>Version 1.0.2 · Windows x64</span>
+          <span>Version 1.2.0 · Windows x64</span>
         </div>
       </aside>
       <main>
@@ -624,6 +634,54 @@ export function App(): React.JSX.Element {
                       </button>
                     )}
                   </div>
+                  <div className="named-url-entry">
+                    <label>
+                      Name
+                      <input
+                        aria-label="URL name"
+                        value={entryName}
+                        maxLength={200}
+                        placeholder="e.g. Main website"
+                        onChange={(e) => setEntryName(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      URL
+                      <input
+                        aria-label="Named URL"
+                        value={entryUrl}
+                        placeholder="https://example.com"
+                        onChange={(e) => setEntryUrl(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      disabled={
+                        !entryUrl.trim() ||
+                        /[\r\n]/.test(entryUrl + entryName) ||
+                        entryName.includes(" | ")
+                      }
+                      onClick={() => {
+                        setText((previous) =>
+                          [
+                            previous.trim(),
+                            entryName.trim()
+                              ? `${entryName.trim()} | ${entryUrl.trim()}`
+                              : entryUrl.trim(),
+                          ]
+                            .filter(Boolean)
+                            .join("\n"),
+                        );
+                        setEntryName("");
+                        setEntryUrl("");
+                      }}
+                    >
+                      Add URL
+                    </button>
+                  </div>
+                  <p>
+                    Name appears before the URL. Paste one URL per line, or use:
+                    Main website | https://example.com
+                  </p>
                   <textarea
                     aria-label="URLs to check"
                     value={text}
@@ -848,6 +906,8 @@ export function App(): React.JSX.Element {
                   </button>
                 </div>
               </div>
+              <Monitoring scanId={selected} settings={settings} />
+              <p>Original scan snapshot below. Current URL status and outage records appear in the live monitoring table above.</p>
               <section className="panel results-panel">
                 <div className="table-toolbar">
                   <input
@@ -906,6 +966,7 @@ export function App(): React.JSX.Element {
                   <table>
                     <thead>
                       <tr>
+                        <th>Name</th>
                         <th onClick={() => sortBy("url")}>URL ↕</th>
                         <th>Status</th>
                         <th onClick={() => sortBy("code")}>HTTP ↕</th>
@@ -935,6 +996,7 @@ export function App(): React.JSX.Element {
                               );
                           }}
                         >
+                          <td>{r.name || "—"}</td>
                           <td className="url-cell" title={r.originalUrl}>
                             {r.url}
                           </td>
@@ -1369,7 +1431,7 @@ export function App(): React.JSX.Element {
           {page === "Settings" && (
             <section className="panel">
               <h3>Developer information</h3>
-              <p>Developed by Sudipta Roy Akash · Version 1.0.2</p>
+              <p>Developed by Sudipta Roy Akash · Version 1.2.0</p>
               <p>
                 Website:{" "}
                 <button
@@ -1399,7 +1461,7 @@ export function App(): React.JSX.Element {
               >
                 sudiptaroy.dev
               </button>
-              ) · v1.0.2
+              ) · v1.2.0
             </span>
             <span>
               {active ? "Scan in progress" : `${history.length} saved scans`} ·
@@ -1427,6 +1489,8 @@ export function App(): React.JSX.Element {
             <section>
               <h3>Overview</h3>
               <dl>
+                <dt>Name</dt>
+                <dd>{detail.result.name || "—"}</dd>
                 <dt>Original URL</dt>
                 <dd>{detail.result.originalUrl}</dd>
                 <dt>Final URL</dt>

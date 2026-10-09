@@ -549,6 +549,37 @@ main {
   font-size: 9px;
   letter-spacing: 0.5px;
 }
+.named-url-entry,
+.monitor-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 16px 0;
+}
+.named-url-entry label {
+  flex: 1;
+  min-width: 180px;
+}
+.named-url-entry label input {
+  width: 100%;
+}
+.monitoring-panel {
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.monitoring-panel p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.monitoring-panel th,
+.monitoring-panel td {
+  white-space: normal;
+}
+.monitor-controls label {
+  display: grid;
+  gap: 8px;
+}
 .notice {
   display: flex;
   justify-content: space-between;

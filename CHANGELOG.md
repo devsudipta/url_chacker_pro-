@@ -6,6 +6,21 @@ Every published version has a separate Git tag and GitHub Release. Executables a
 
 Record future fixes here as they are implemented. No additional fixes are claimed yet.
 
+## 1.2.0 — 2026-10-09
+
+### Added
+
+- Per-URL names before URLs, with a Name/URL entry form, named paste lines, named CSV/XLSX imports, searchable names and names in reports.
+- Automatic repeated URL checks at 5/10/20/30-second and 1/2/5/10-minute intervals while the application is open.
+- Persistent offline/recovery timestamps, observed outage durations, monitoring sessions and every check in SQLite; complete monitoring JSON export.
+- Live monitoring status table and saved outage history, retained across app restarts.
+
+### Reliability
+
+- Cycles do not overlap; stopping cancels active requests. Changing the interval preserves ongoing outages.
+- Closing/crashing ends observation without inventing recovery times or a complete outage duration.
+- Additive database migration preserves previous scans, results and settings.
+
 ## 1.0.2 — 2026-10-06
 
 ### Fixed

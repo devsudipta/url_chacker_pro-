@@ -216,8 +216,9 @@ export class DatabaseService {
     let where = "r.scan_id=?";
     const args: (string | number)[] = [query.scanId];
     if (query.search) {
-      where += " AND (r.normalized_url LIKE ? OR r.error_code LIKE ?)";
-      args.push(`%${query.search}%`, `%${query.search}%`);
+      where +=
+        " AND (r.normalized_url LIKE ? OR r.error_code LIKE ? OR json_extract(r.data,'$.name') LIKE ?)";
+      args.push(`%${query.search}%`, `%${query.search}%`, `%${query.search}%`);
     }
     const filters: Record<string, string> = {
       online: "r.status_category='online'",

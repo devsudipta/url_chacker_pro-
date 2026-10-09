@@ -5,6 +5,9 @@ import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { DatabaseService } from "./database/DatabaseService";
 import { ScanService } from "./services/ScanService";
+import { MonitorService, monitorIntervals } from "./services/MonitorService";
+import { MonitorStore } from "./services/MonitorStore";
+import { writeFile } from "node:fs/promises";
 import { importPaths } from "./services/ImportService";
 import { ExportService } from "./services/ExportService";
 import { summarize, normalizeUrl } from "./utilities/url";
@@ -27,6 +30,7 @@ if (process.env.PORTABLE_EXECUTABLE_DIR)
 let window: BrowserWindow | null = null;
 let db: DatabaseService;
 let scanner: ScanService;
+let monitor: MonitorService;
 let quitting = false;
 const ownsInstance = app.requestSingleInstanceLock();
 if (!ownsInstance) app.quit();
@@ -52,6 +56,7 @@ app
       log,
     );
     const exporter = new ExportService(db);
+    monitor = new MonitorService(db, new MonitorStore(db.location), log);
     session.defaultSession.setPermissionRequestHandler(
       (_webContents, _permission, callback) => callback(false),
     );
@@ -111,16 +116,47 @@ app
       scanner.control(z.enum(["pause", "resume", "stop"]).parse(input)),
     );
     handle("scan:history", () => db.history());
+    handle("monitor:start", (id, interval, settings) =>
+      monitor.start(
+        idSchema.parse(id),
+        z
+          .number()
+          .refine(
+            (value) => monitorIntervals.includes(value),
+            "Unsupported monitoring interval",
+          )
+          .parse(interval),
+        settingsSchema.parse(settings),
+      ),
+    );
+    handle("monitor:stop", () => monitor.stop());
+    handle("monitor:state", (id) =>
+      monitor.store.snapshot(idSchema.parse(id), monitor.current),
+    );
+    handle("monitor:export", async (input) => {
+      const id = idSchema.parse(input);
+      const target = await dialog.showSaveDialog(window!, {
+        defaultPath: "URLChecker-monitoring.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (target.canceled || !target.filePath) return null;
+      await writeFile(
+        target.filePath,
+        JSON.stringify(monitor.store.export(id), null, 2),
+      );
+      return target.filePath;
+    });
     handle("scan:results", (input) => db.results(querySchema.parse(input)));
     handle("scan:detail", (input) => db.detail(idSchema.parse(input)));
     handle("scan:dashboard", (input) => db.dashboard(idSchema.parse(input)));
-    handle("scan:delete", (input) => {
+    handle("scan:delete", async (input) => {
       const id = idSchema.parse(input);
       if (
         scanner.current?.id === id &&
         ["running", "paused"].includes(scanner.current.status)
       )
         throw new Error("Stop the active scan before deleting it");
+      if (monitor.current?.scanId === id) await monitor.stop();
       db.deleteScan(id);
     });
     handle("scan:compare", (a, b) =>
@@ -177,7 +213,7 @@ app.on("before-quit", (event) => {
   if (quitting || !scanner) return;
   event.preventDefault();
   quitting = true;
-  void scanner.shutdown().finally(() => {
+  void Promise.all([scanner.shutdown(), monitor?.shutdown()]).finally(() => {
     db.close();
     app.quit();
   });

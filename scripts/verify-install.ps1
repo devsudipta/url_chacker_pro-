@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $projectDirectory = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $testDirectory = [IO.Path]::GetFullPath((Join-Path $projectDirectory 'test-artifacts\installed'))
 if (-not $testDirectory.StartsWith($projectDirectory + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Test directory must stay inside the project.' }
-$installerPath = Join-Path $projectDirectory 'dist\URLChecker-Setup-1.0.2.exe'
+$installerPath = Join-Path $projectDirectory 'dist\URLChecker-Setup-1.2.0.exe'
 $applicationPath = Join-Path $testDirectory 'URL Checker Pro.exe'
 $getRegistration = { Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'URL Checker Pro*' } }
 $registration = & $getRegistration

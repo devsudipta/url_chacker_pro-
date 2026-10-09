@@ -1,16 +1,16 @@
 # URL Checker Pro
 
-**Version 1.0.2 · Windows 10/11 x64 · Developed by Sudipta Roy Akash**
+**Version 1.2.0 · Windows 10/11 x64 · Developed by Sudipta Roy Akash**
 
 ## Download and install
 
-- [Download the 1.0.2 Windows installer](https://github.com/devsudipta/url_chacker_pro-/releases/download/v1.0.2/URLChecker-Setup-1.0.2.exe) — installation with desktop/Start Menu shortcuts and an uninstaller.
-- [Download the 1.0.2 portable executable](https://github.com/devsudipta/url_chacker_pro-/releases/download/v1.0.2/URLChecker-Portable-1.0.2.exe) — run from a writable folder without installing.
+- [Download the 1.2.0 Windows installer](https://github.com/devsudipta/url_chacker_pro-/releases/download/v1.2.0/URLChecker-Setup-1.2.0.exe) — installation with desktop/Start Menu shortcuts and an uninstaller.
+- [Download the 1.2.0 portable executable](https://github.com/devsudipta/url_chacker_pro-/releases/download/v1.2.0/URLChecker-Portable-1.2.0.exe) — run from a writable folder without installing.
 - [All versions and release notes](https://github.com/devsudipta/url_chacker_pro-/releases) · [Fixes and changelog](CHANGELOG.md)
 
 These development builds do not have a publisher signing certificate. Node.js is required for source development, not for running the downloaded application.
 
-Launch the app, open **Quick Scan**, paste URLs and select a protocol. **Automatic** keeps the entered scheme and tries HTTP if HTTPS fails without a response. **Both** checks HTTP and HTTPS separately. Start the scan, inspect results and export reports.
+Launch the app, open **Quick Scan**, add a Name and URL (or paste URLs), and select a protocol. **Automatic** keeps the entered scheme and tries HTTP if HTTPS fails without a response. **Both** checks HTTP and HTTPS separately. After the scan, select a recheck interval and click **Start monitoring** to track live status and save outage/recovery times. Use **Show outage history** and **Export monitoring JSON** for the saved record.
 
 ## Developer
 
@@ -83,7 +83,7 @@ Unit/integration tests start a deterministic loopback HTTP server: success, 404,
 After creating a portable build, test that actual executable with:
 
 ```powershell
-$env:URLCHECKER_TEST_EXE = Join-Path (Get-Location) 'dist\URLChecker-Portable-1.0.2.exe'
+$env:URLCHECKER_TEST_EXE = Join-Path (Get-Location) 'dist\URLChecker-Portable-1.2.0.exe'
 npx playwright test
 Remove-Item Env:URLCHECKER_TEST_EXE
 ```
@@ -94,10 +94,10 @@ The same environment variable can target an installed executable. Portable tests
 
 ```powershell
 npm run dist:win
-# dist\URLChecker-Setup-1.0.2.exe
+# dist\URLChecker-Setup-1.2.0.exe
 
 npm run dist:portable
-# dist\URLChecker-Portable-1.0.2.exe
+# dist\URLChecker-Portable-1.2.0.exe
 ```
 
 Do not run two distribution/build commands concurrently: both use `out/` and `dist/win-unpacked/`. First builds download Electron/NSIS tools. The installer is assisted (`oneClick: false`), per-user by default and allows a custom installation directory. It registers in Installed Apps and supplies an uninstaller. Keep the stable application ID `dev.sudiptaroy.urlchecker` across releases. Publisher metadata names Sudipta Roy Akash.
@@ -133,7 +133,19 @@ out/                    Compiled application
 dist/                   Installer, portable and unpacked builds
 ```
 
-## Version 1.0.2
+## Version 1.2.0
+
+### Names and automatic rechecks
+
+In Quick Scan, enter a **Name** before the **URL** and click **Add URL**. You can also paste `Main website | https://example.com`, one entry per line, or import CSV/XLSX with `Name` and `URL` column headers. Names appear before URLs in results and reports and are searchable.
+
+After the scan finishes, use **Auto refresh & outage history** on URL Results. Choose 5, 10, 20 or 30 seconds, or 1, 2, 5 or 10 minutes, then click **Start monitoring**. Each cycle rechecks the URLs; the delay starts after a completed cycle so requests never overlap. **Apply interval** changes the delay without resetting an outage. Stop monitoring to end the session.
+
+The live table updates automatically and every check is stored in SQLite. HTTP 2xx/3xx without a network/redirect error counts as online; other results count as offline. **Show outage history** displays when failure was detected, when recovery was detected, and the observed offline duration. **Export monitoring JSON** saves all check records and outage history. Names, ports, query strings and existing HTTP/HTTPS selection are preserved.
+
+Monitoring continues across page navigation while the app is running. Closing the app stops monitoring; saved records remain after reopening. Monitoring does not run as a Windows background service and does not restart automatically. Outages with no observed recovery show an unknown final duration when monitoring ends. Detection times are approximate check times; availability between checks is not measured. Monitoring history can grow with frequent checks; deleting its parent scan removes those records.
+
+The live monitoring table shows current status; the original scan table and scan reports remain the original scan snapshot. The history view shows the newest 1,000 outages; monitoring JSON includes all periods and checks.
 
 API Checker has been removed. Scan configuration offers Automatic, HTTPS only, HTTP only and Both. Automatic preserves the entered scheme (HTTPS for scheme-less URLs) and tries HTTP when HTTPS fails without an HTTP response. Both saves separate results for each scheme. Paths and queries are preserved; TLS verification stays enabled. Automatic fallback uses unencrypted HTTP; choose HTTPS only when required.
 

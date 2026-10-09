@@ -12,7 +12,7 @@ export const defaults: Settings = {
   hostDelay: 100,
   respectRobots: true,
   checkAssets: true,
-  userAgent: "URLCheckerPro/1.0.2",
+  userAgent: "URLCheckerPro/1.2.0",
   fastThreshold: 500,
   normalThreshold: 1500,
   slowThreshold: 3000,

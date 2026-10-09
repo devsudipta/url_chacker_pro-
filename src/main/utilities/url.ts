@@ -15,28 +15,41 @@ export function normalizeUrl(input: string, base?: string): string {
   return url.href;
 }
 export function summarize(values: string[]): ImportSummary {
+  const names: Record<string, string> = {};
   const urls: string[] = [],
     invalid: string[] = [],
     seen = new Set<string>();
   let duplicates = 0;
   for (const raw of values.map((v) => v.trim()).filter(Boolean)) {
+    const entry = parseNamedUrl(raw);
     try {
-      const url = normalizeUrl(raw);
+      const url = normalizeUrl(entry.url);
+      if (entry.name && !names[url]) names[url] = entry.name;
       if (seen.has(url)) duplicates++;
       else {
         seen.add(url);
         urls.push(url);
       }
     } catch {
-      invalid.push(raw);
+      invalid.push(entry.url);
     }
   }
   return {
+    ...(Object.keys(names).length ? { names } : {}),
     urls,
     invalid,
     duplicates,
     imported: urls.length + invalid.length + duplicates,
   };
+}
+export function parseNamedUrl(line: string): { name: string; url: string } {
+  const separator = line.indexOf(" | ");
+  return separator < 0
+    ? { name: "", url: line.trim() }
+    : {
+        name: line.slice(0, separator).trim().slice(0, 200),
+        url: line.slice(separator + 3).trim(),
+      };
 }
 export const isInternal = (target: string, base: string): boolean =>
   new URL(target).hostname === new URL(base).hostname;
